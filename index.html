@@ -289,7 +289,7 @@
     let animationId = null;
 
     const PHYS = {
-        m1: { grav: 0.55, jX: 8.5, jY: -15, itemS: [10, 20, 50] },
+        m1: { grav: 0.55, jX: 8.5, jY: -15, itemS: [10, 20, 50], platformLimit: 15 },
         m2: { 
             speed: 4.8, dropS: 9.8, liftPow: 20, 
             decayTable: [0, 0.4, 1.2, 2.8], itemSize: 38, rollFric: 0.95 
@@ -325,22 +325,30 @@
             document.getElementById('m1-ui').classList.remove('hidden');
             document.getElementById('m2-ui').classList.add('hidden');
             document.getElementById('mode-display').textContent = 'JUMP';
-            timeLeft = 30; player.x = canvas.width / 2; player.y = canvas.height * 0.65; player.vx = player.vy = player.rot = 0;
+            timeLeft = 30; 
+            resize(); // スポーン計算の前にサイズを確定
+            player.x = canvas.width / 2; player.y = canvas.height * 0.65; player.vx = player.vy = player.rot = 0;
+            
+            // 初期の床を配置
             m1Platforms.push({ x: 0, y: player.y + 100, w: canvas.width, h: 250 });
-            for (let i = 1; i < 8; i++) spawnM1Platform(player.y - (i * (canvas.height / 8)));
+            // 画面の上の方（画面外の上空まで）に床とアイテムを多めに配置
+            for (let i = 1; i < PHYS.m1.platformLimit; i++) {
+                spawnM1Platform(player.y - (i * (canvas.height / 8)));
+            }
             bgm2.pause(); bgm1.currentTime = 0; bgm1.play().catch(() => {});
         } else {
             header.className = 'game-header header-bottom';
             document.getElementById('m1-ui').classList.add('hidden');
             document.getElementById('m2-ui').classList.remove('hidden');
             document.getElementById('mode-display').textContent = 'MAGNET';
-            timeLeft = 60; crane.x = canvas.width / 2; crane.state = 'move'; crane.dY = 0; crane.items = []; crane.lastAct = 0;
+            timeLeft = 60; 
+            resize();
+            crane.x = canvas.width / 2; crane.state = 'move'; crane.dY = 0; crane.items = []; crane.lastAct = 0;
             spawnInterval = 2000; spawnTimer = 0;
             for(let i=0; i<3; i++) spawnM2Item();
             bgm1.pause(); bgm2.currentTime = 0; bgm2.play().catch(() => {});
         }
         
-        resize();
         lastTime = performance.now();
         if (animationId) cancelAnimationFrame(animationId);
         animationId = requestAnimationFrame(loop);
@@ -408,29 +416,40 @@
         if (player.x < 0 || player.x > canvas.width) player.vx *= -0.5;
         
         const focus = canvas.height * 0.65;
+        
+        // スクロール処理
         if (player.y < focus) {
             const s = focus - player.y;
             player.y = focus;
             m1Platforms.forEach(p => p.y += s);
             m1Items.forEach(i => i.y += s);
+            
+            // 画面外のプラットフォーム削除
             m1Platforms = m1Platforms.filter(p => p.y < canvas.height + 300);
-            while (m1Platforms.length < 8) {
+            // 常に規定数(PHYS.m1.platformLimit)の足場が上方に確保されるように補充
+            while (m1Platforms.length < PHYS.m1.platformLimit) {
                 const minY = Math.min(...m1Platforms.map(p => p.y));
                 spawnM1Platform(minY - (canvas.height / 8));
             }
         }
+
+        // 落下判定
         if (player.y > canvas.height) { 
             player.x = canvas.width / 2; player.y = canvas.height * 0.2; player.vx = player.vy = 0;
             const penalty = 100; score = Math.max(0, score - penalty); 
             pop(canvas.width / 2, canvas.height / 2, "-" + penalty, -penalty);
             return;
         }
+
+        // 床判定
         m1Platforms.forEach(p => {
             if (player.vy > 0 && player.x > p.x && player.x < p.x + p.w && 
                 player.y + player.r > p.y && player.y + player.r < p.y + p.h + player.vy) {
                 player.y = p.y - player.r; player.vy = 0; player.vx *= 0.85; player.pull = false;
             }
         });
+
+        // アイテム回収
         m1Items.forEach(i => {
             if (!i.collected && Math.hypot(player.x - i.x, player.y - i.y) < 45) {
                 i.collected = true; score += PHYS.m1.itemS[i.type]; pop(i.x, i.y, "+" + PHYS.m1.itemS[i.type], PHYS.m1.itemS[i.type]);
@@ -558,7 +577,8 @@
             ctx.beginPath(); ctx.moveTo(-magR, 0); ctx.lineTo(-magR, 28); ctx.stroke();
             ctx.strokeStyle = colorS; ctx.beginPath(); ctx.arc(0, 0, magR, Math.PI * 1.5, Math.PI * 2); ctx.stroke();
             ctx.beginPath(); ctx.moveTo(magR, 0); ctx.lineTo(magR, 28); ctx.stroke();
-            ctx.strokeStyle = 'white'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-magR, 24); ctx.lineTo(-magR, 28); ctx.stroke();
+            ctx.strokeStyle = 'white'; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.moveTo(-magR, 24); ctx.lineTo(-magR, 28); ctx.stroke();
             ctx.beginPath(); ctx.moveTo(magR, 24); ctx.lineTo(magR, 28); ctx.stroke();
             ctx.restore();
         }
