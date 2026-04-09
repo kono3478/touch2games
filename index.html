@@ -48,10 +48,10 @@
             align-items: center;
         }
         
-        /* UIヘッダー */
+        /* UIヘッダー（画面下部） */
         .game-header {
             position: absolute;
-            top: 0;
+            bottom: 0;
             left: 0;
             width: 100%;
             height: 70px;
@@ -60,11 +60,11 @@
             align-items: center;
             padding: 0 20px;
             background: rgba(15, 23, 42, 0.95);
-            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+            border-top: 2px solid rgba(255, 255, 255, 0.1);
             z-index: 200;
         }
 
-        /* 共通操作エリア（四隅） */
+        /* 共通操作エリア */
         .tap-zone {
             position: absolute;
             width: 46%;
@@ -86,14 +86,20 @@
         .m2-zone { color: transparent; background: transparent; border: 1px solid transparent; }
         .m2-zone:active { background: rgba(245, 158, 11, 0.25); border-color: rgba(245, 158, 11, 0.4); color: rgba(255, 255, 255, 0.4); }
 
-        .pos-tl { top: 80px; left: 2%; border-radius: 24px; }
-        .pos-tr { top: 80px; right: 2%; border-radius: 24px; }
-        .pos-bl { bottom: 3%; left: 2%; border-radius: 24px; }
-        .pos-br { bottom: 3%; right: 2%; border-radius: 24px; }
+        .pos-tl { top: 2%; left: 2%; border-radius: 24px; }
+        .pos-tr { top: 2%; right: 2%; border-radius: 24px; }
+        .pos-bl { bottom: 80px; left: 2%; border-radius: 24px; }
+        .pos-br { bottom: 80px; right: 2%; border-radius: 24px; }
+
+        /* モード2専用：上部エリア拡大 */
+        #m2-ui .pos-tl, #m2-ui .pos-tr {
+            top: 0 !important;
+            height: 48% !important;
+        }
 
         #lift-gauge {
             position: absolute;
-            bottom: 25%;
+            bottom: 15%;
             width: 70%;
             height: 12px;
             background: rgba(0,0,0,0.8);
@@ -109,7 +115,7 @@
             background: linear-gradient(to right, #f59e0b, #fbbf24);
         }
 
-        /* スコアポップアップエフェクト */
+        /* スコアポップアップ */
         .score-pop {
             position: absolute;
             font-weight: 900;
@@ -256,7 +262,7 @@
     const finalScoreEl = document.getElementById('final-score');
     const liftFill = document.getElementById('lift-fill');
     
-    // サウンド設定
+    // サウンド
     const JUMP_SE_URL = 'https://raw.githubusercontent.com/kono3478/sozai/main/se_jump_001.wav';
     const jumpSound = new Audio(JUMP_SE_URL);
     jumpSound.volume = 0.4;
@@ -266,7 +272,6 @@
     const get3Sound = new Audio('https://raw.githubusercontent.com/kono3478/sozai/main/Get3.mp3');
     get1Sound.volume = 0.5; get2Sound.volume = 0.5; get3Sound.volume = 0.5;
 
-    // BGM設定
     const BGM1_URL = 'https://raw.githubusercontent.com/kono3478/sozai/main/maou_bgm_8bit14.mp3';
     const bgm1 = new Audio(BGM1_URL);
     bgm1.loop = true; bgm1.volume = 0.3;
@@ -293,13 +298,16 @@
     const player = { x: 0, y: 0, r: 22, vx: 0, vy: 0, rot: 0, pull: false, pT: 0 };
     let m1Platforms = [];
     let m1Items = [];
+    let m1ScrollRemaining = 0;
 
-    const crane = { x: 0, y: 130, state: 'move', dY: 0, items: [], force: 0, dir: 1, lastAct: 0 };
+    // crane.y を 80 に引き上げ (上部UI削除に伴う)
+    const crane = { x: 0, y: 80, state: 'move', dY: 0, items: [], force: 0, dir: 1, lastAct: 0 };
     let m2Items = [];
     let spawnTimer = 0;
     let spawnInterval = 2000;
 
     function resize() {
+        if (!stage) return;
         canvas.width = stage.clientWidth;
         canvas.height = stage.clientHeight;
     }
@@ -307,6 +315,7 @@
     function startGame(m) {
         mode = m; gameState = 'play'; score = 0;
         m1Items = []; m1Platforms = []; m2Items = [];
+        m1ScrollRemaining = 0;
         document.getElementById('title-screen').classList.add('hidden');
         document.getElementById('game-header').classList.remove('hidden');
         document.getElementById('result-screen').classList.add('hidden');
@@ -389,41 +398,57 @@
     }
 
     function updateM1() {
+        if (m1ScrollRemaining > 0) {
+            let step = m1ScrollRemaining * 0.12;
+            if (step < 0.5) step = m1ScrollRemaining;
+            player.y += step;
+            m1Platforms.forEach(p => p.y += step);
+            m1Items.forEach(i => i.y += step);
+            m1ScrollRemaining -= step;
+            m1Platforms = m1Platforms.filter(p => p.y < canvas.height + 300);
+            while (m1Platforms.length < 8) {
+                const minY = Math.min(...m1Platforms.map(p => p.y));
+                spawnM1Platform(minY - (canvas.height / 8));
+            }
+        }
         let g = PHYS.m1.grav; if (player.pull && player.pT-- > 0) g *= 0.5;
         player.vy += g; player.x += player.vx; player.y += player.vy; player.rot += player.vx * 0.05;
         if (player.x < 0 || player.x > canvas.width) player.vx *= -0.5;
-        m1Platforms.forEach(p => {
-            if (player.vy > 0 && player.x > p.x && player.x < p.x + p.w && player.y + player.r > p.y && player.y + player.r < p.y + p.h + player.vy) {
-                player.y = p.y - player.r; player.vy = 0; player.vx *= 0.85; player.pull = false;
-            }
-        });
-        m1Items.forEach(i => {
-            if (!i.collected && Math.hypot(player.x - i.x, player.y - i.y) < 45) {
-                i.collected = true; 
-                const gain = PHYS.m1.itemS[i.type];
-                score += gain; pop(i.x, i.y, "+" + gain, gain);
-            }
-        });
         const focus = canvas.height * 0.65;
+        let landedOnFloor = false;
         if (player.y > canvas.height) { 
             player.x = canvas.width / 2; player.y = canvas.height * 0.2; player.vx = player.vy = 0;
-            const penalty = 100; score = Math.max(0, score - penalty); 
+            m1ScrollRemaining = 0; const penalty = 100;
+            score = Math.max(0, score - penalty); 
             pop(canvas.width / 2, canvas.height / 2, "-" + penalty, -penalty);
-        } else if (player.y < focus) {
-            const s = focus - player.y; player.y = focus;
-            m1Platforms.forEach(p => p.y += s); m1Items.forEach(i => i.y += s);
-            m1Platforms = m1Platforms.filter(p => p.y < canvas.height + 300);
-            while (m1Platforms.length < 8) spawnM1Platform(Math.min(...m1Platforms.map(p => p.y)) - (canvas.height / 8));
+            return;
         }
+        m1Platforms.forEach(p => {
+            if (player.vy > 0 && player.x > p.x && player.x < p.x + p.w && 
+                player.y + player.r > p.y && player.y + player.r < p.y + p.h + player.vy) {
+                player.y = p.y - player.r; player.vy = 0; player.vx *= 0.85; player.pull = false; landedOnFloor = true; 
+            }
+        });
+        if (landedOnFloor && player.y < focus) { m1ScrollRemaining += (focus - player.y); }
+        m1Items.forEach(i => {
+            if (!i.collected && Math.hypot(player.x - i.x, player.y - i.y) < 45) {
+                i.collected = true; score += PHYS.m1.itemS[i.type]; pop(i.x, i.y, "+" + PHYS.m1.itemS[i.type], PHYS.m1.itemS[i.type]);
+            }
+        });
     }
 
     function updateM2(dt) {
         spawnTimer += dt;
         if (spawnTimer > spawnInterval) { spawnM2Item(); spawnTimer = 0; spawnInterval = Math.max(750, spawnInterval - 30); }
+        
+        // ヘッダー高さを考慮した底辺ライン (70px UI + アイマージン)
+        const floorY = canvas.height - 95;
+
         m2Items.forEach(i => {
             if (!i.settled && !i.collected) {
                 i.vy += 0.22; i.x += i.vx; i.y += i.vy; i.vx *= PHYS.m2.rollFric;
-                if (i.y > canvas.height - 40) { i.y = canvas.height - 40; i.vy = 0; i.vx *= 0.7; if(Math.abs(i.vx)<0.15) i.settled = true; }
+                // アイテムの着地位置をUIヘッダーの上に調整
+                if (i.y > floorY) { i.y = floorY; i.vy = 0; i.vx *= 0.7; if(Math.abs(i.vx)<0.15) i.settled = true; }
                 if (i.x < 35) { i.x = 35; i.vx *= -0.4; } else if (i.x > canvas.width - 35) { i.x = canvas.width - 35; i.vx *= -0.4; }
                 m2Items.forEach(target => {
                     if (target !== i && target.settled && !target.collected) {
@@ -447,7 +472,8 @@
             if (crane.x < 65 || crane.x > canvas.width - 65) crane.dir *= -1;
         } else if (crane.state === 'drop') {
             crane.dY += PHYS.m2.dropS;
-            if (crane.dY > canvas.height - 210) crane.state = 'grab';
+            // 降下限界をUI手前までに調整
+            if (crane.dY > floorY - crane.y - 40) crane.state = 'grab';
             let hit = m2Items.find(i => !i.collected && i.settled && Math.hypot(crane.x - i.x, (crane.y + crane.dY) - i.y) < 60);
             if (hit) {
                 let picked = [hit];
@@ -474,23 +500,21 @@
             if (crane.dY <= 0) {
                 if (crane.items.length > 0) {
                     const currentCount = crane.items.length;
-                    if (currentCount === 1) { get1Sound.currentTime = 0; get1Sound.play().catch(()=>{}); }
-                    else if (currentCount === 2) { get2Sound.currentTime = 0; get2Sound.play().catch(()=>{}); }
-                    else if (currentCount === 3) { get3Sound.currentTime = 0; get3Sound.play().catch(()=>{}); }
-
+                    if (currentCount === 1) get1Sound.play().catch(()=>{});
+                    else if (currentCount === 2) get2Sound.play().catch(()=>{});
+                    else if (currentCount === 3) get3Sound.play().catch(()=>{});
                     let gain = 0; let popTxt = "";
                     crane.items.forEach((i, idx) => {
                         const itemScore = PHYS.m1.itemS[i.type];
                         if (idx === 0) gain = itemScore; else gain *= itemScore;
-                        i.collected = true;
-                        popTxt += (idx === 0 ? "" : "×") + itemScore;
+                        i.collected = true; popTxt += (idx === 0 ? "" : "×") + itemScore;
                     });
                     score += gain;
                     const displayMsg = (currentCount > 1) ? (popTxt + " = " + gain) : gain;
                     pop(canvas.width / 2, canvas.height / 2, displayMsg, gain);
                 }
                 resetCrane();
-            } else if (crane.dY > canvas.height - 40) resetCrane();
+            } else if (crane.dY > floorY - crane.y) resetCrane();
         }
     }
 
@@ -506,8 +530,6 @@
         else if (val >= 1000) rank = "pop-legendary";
         else if (val >= 50) rank = "pop-excellent";
         else if (val >= 20) rank = "pop-great";
-        else rank = "pop-normal";
-        
         if (mode === 2 && val > 0) { d.classList.add('pop-m2-fixed'); }
         d.className += ` score-pop ${rank}`;
         d.style.left = x + 'px'; d.style.top = y + 'px'; d.textContent = txt;
@@ -516,8 +538,7 @@
     }
 
     function endGame(reason) {
-        gameState = 'over';
-        bgm1.pause(); bgm2.pause();
+        gameState = 'over'; bgm1.pause(); bgm2.pause();
         document.getElementById('result-title').textContent = reason;
         finalScoreEl.textContent = score;
         document.getElementById('m1-ui').classList.add('hidden');
@@ -536,18 +557,14 @@
             m2Items.forEach(i => { if(!i.collected) { ctx.font = '40px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(emojis[i.type], i.x, i.y); } });
             ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 2;
             ctx.beginPath(); ctx.moveTo(crane.x, 0); ctx.lineTo(crane.x, crane.y + crane.dY); ctx.stroke();
-            
-            ctx.save();
-            ctx.translate(crane.x, crane.y + crane.dY);
+            ctx.save(); ctx.translate(crane.x, crane.y + crane.dY);
             const isCooling = Date.now() - crane.lastAct < 1000;
             const magR = 25; ctx.lineWidth = 14; ctx.lineCap = 'round';
             const colorN = isCooling ? '#475569' : '#ef4444';
             const colorS = isCooling ? '#94a3b8' : '#3b82f6';
-            ctx.strokeStyle = colorN;
-            ctx.beginPath(); ctx.arc(0, 0, magR, Math.PI, Math.PI * 1.5); ctx.stroke();
+            ctx.strokeStyle = colorN; ctx.beginPath(); ctx.arc(0, 0, magR, Math.PI, Math.PI * 1.5); ctx.stroke();
             ctx.beginPath(); ctx.moveTo(-magR, 0); ctx.lineTo(-magR, 28); ctx.stroke();
-            ctx.strokeStyle = colorS;
-            ctx.beginPath(); ctx.arc(0, 0, magR, Math.PI * 1.5, Math.PI * 2); ctx.stroke();
+            ctx.strokeStyle = colorS; ctx.beginPath(); ctx.arc(0, 0, magR, Math.PI * 1.5, Math.PI * 2); ctx.stroke();
             ctx.beginPath(); ctx.moveTo(magR, 0); ctx.lineTo(magR, 28); ctx.stroke();
             ctx.strokeStyle = 'white'; ctx.lineWidth = 4;
             ctx.beginPath(); ctx.moveTo(-magR, 24); ctx.lineTo(-magR, 28); ctx.stroke();
