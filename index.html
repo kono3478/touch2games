@@ -100,7 +100,7 @@
 
         #lift-gauge {
             position: absolute;
-            bottom: 15%;
+            top: 100px; /* 修正：上部に移動 */
             width: 70%;
             height: 12px;
             background: rgba(0,0,0,0.8);
@@ -216,10 +216,11 @@
 
     <!-- モード1操作 (UI上部) -->
     <div id="m1-ui" class="ui-overlay hidden">
-        <div class="tap-zone m1-zone pos-tl" onmousedown="jumpM1('left', true)" ontouchstart="jumpM1('left', true)">↖️ PULL LEFT</div>
-        <div class="tap-zone m1-zone pos-tr" onmousedown="jumpM1('right', true)" ontouchstart="jumpM1('right', true)">PULL RIGHT ↗️</div>
-        <div class="tap-zone m1-zone pos-bl" onmousedown="jumpM1('right', false)" ontouchstart="jumpM1('right', false)">CROSS RIGHT ↗️</div>
-        <div class="tap-zone m1-zone pos-br" onmousedown="jumpM1('left', false)" ontouchstart="jumpM1('left', false)">↖️ CROSS LEFT</div>
+        <!-- 修正：左ゾーンは常に左(left)、右ゾーンは常に右(right)へ飛ぶように統一 -->
+        <div class="tap-zone m1-zone pos-tl" onmousedown="jumpM1('left', true)" ontouchstart="jumpM1('left', true)">↖️ HIGH LEFT</div>
+        <div class="tap-zone m1-zone pos-tr" onmousedown="jumpM1('right', true)" ontouchstart="jumpM1('right', true)">HIGH RIGHT ↗️</div>
+        <div class="tap-zone m1-zone pos-bl" onmousedown="jumpM1('left', false)" ontouchstart="jumpM1('left', false)">↖️ LEFT</div>
+        <div class="tap-zone m1-zone pos-br" onmousedown="jumpM1('right', false)" ontouchstart="jumpM1('right', false)">RIGHT ↗️</div>
     </div>
 
     <!-- モード2操作 (UI下部) -->
